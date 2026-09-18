@@ -327,6 +327,30 @@ async def test_aws_iot_setup_retries_when_cloud_unreachable(hass: HomeAssistant)
     assert config_entry.state is ConfigEntryState.SETUP_RETRY
 
 
+async def test_setup_retry_reason_names_the_underlying_failure(hass: HomeAssistant):
+    """The retry reason has to say what actually went wrong.
+
+    Drives the real `authenticate`, so this covers the whole path: a bare
+    TimeoutError from the transport, wrapped into AwsIotConnectionError, into
+    ConfigEntryNotReady, and finally onto the config entry where the user
+    reads it. A bare TimeoutError has an empty str(), so without the type
+    fallback this reason is blank.
+    """
+    config_entry = _aws_iot_entry()
+    config_entry.add_to_hass(hass)
+
+    session = MagicMock()
+    session.post = MagicMock(side_effect=TimeoutError)
+
+    with patch(
+        "custom_components.bestway.async_get_clientsession", return_value=session
+    ):
+        assert await hass.config_entries.async_setup(config_entry.entry_id) is False
+
+    assert config_entry.state is ConfigEntryState.SETUP_RETRY
+    assert "TimeoutError" in (config_entry.reason or "")
+
+
 async def test_aws_iot_setup_starts_reauth_when_login_rejected(hass: HomeAssistant):
     """A rejected login is definitive, so setup must ask for reauthentication.
 

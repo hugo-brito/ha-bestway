@@ -4,6 +4,7 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from aiohttp import ClientError
 
 from custom_components.bestway.aws_iot.api import (
     AwsIotApi,
@@ -365,6 +366,32 @@ async def test_authenticate_wraps_timeout_as_connection_error(mock_session):
 
     with pytest.raises(AwsIotConnectionError):
         await AwsIotApi.authenticate(mock_session, "test_visitor")
+
+
+@pytest.mark.asyncio
+async def test_authenticate_names_a_cause_that_has_no_message(mock_session):
+    """A bare TimeoutError has an empty str(), and this message becomes the
+    config entry's failure reason. Without naming the type it says nothing.
+    """
+    mock_session.post = MagicMock(side_effect=TimeoutError)
+
+    with pytest.raises(AwsIotConnectionError) as err:
+        await AwsIotApi.authenticate(mock_session, "test_visitor")
+
+    assert "TimeoutError" in str(err.value)
+
+
+@pytest.mark.asyncio
+async def test_authenticate_keeps_a_cause_that_explains_itself(mock_session):
+    """A transport error carrying a message keeps it, so the reason can
+    distinguish a refused connection from a timeout.
+    """
+    mock_session.post = MagicMock(side_effect=ClientError("connection refused"))
+
+    with pytest.raises(AwsIotConnectionError) as err:
+        await AwsIotApi.authenticate(mock_session, "test_visitor")
+
+    assert "connection refused" in str(err.value)
 
 
 @pytest.mark.asyncio

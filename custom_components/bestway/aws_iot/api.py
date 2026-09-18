@@ -200,8 +200,14 @@ class AwsIotApi(RawStateApi):
 
                     return str(token)
         except (TimeoutError, ClientError) as err:
+            # Name the cause. `asyncio.timeout` raises a bare TimeoutError
+            # whose str() is empty, and this message becomes the config entry's
+            # failure reason - without the fallback it reads as a dangling
+            # colon and says nothing about whether the login timed out, was
+            # refused, or failed to resolve.
             raise AwsIotConnectionError(
-                "Unable to reach the authentication service"
+                "Unable to reach the authentication service: "
+                f"{str(err) or type(err).__name__}"
             ) from err
 
     @staticmethod
